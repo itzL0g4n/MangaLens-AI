@@ -2,13 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, ScanEye, X, ZoomIn, ZoomOut, RotateCcw, AlertCircle, Layers, ChevronLeft, ChevronRight, Plus, Trash2, CheckCircle2, Globe, Search, Edit, Play, Square } from 'lucide-react';
 import { translateMangaPage, identifyMangaTitle, getMangaContext } from '../services/geminiService';
 import { AnalysisResult, MangaContext } from '../types';
-// @ts-ignore
-import * as pdfjsLib from 'pdfjs-dist';
-// @ts-ignore
-import JSZip from 'jszip';
-
-// Set worker source for PDF.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
 
 interface PageData {
     id: string;
@@ -161,115 +154,132 @@ const MangaTranslator: React.FC = () => {
     }
 
     const processPdfFile = async (file: File, onBatchLoaded: (newPages: PageData[]) => void) => {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        const BATCH_SIZE = 20;
-        let batch: PageData[] = [];
-        let currentBatchSize = 0;
+        try {
+            // Dynamically import PDF.js from CDN to bypass local build 'Top-level await' errors
+            // @ts-ignore
+            const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379');
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-            if (pageCountRef.current + i - 1 >= MAX_PAGES) break;
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            const BATCH_SIZE = 20;
+            let batch: PageData[] = [];
+            let currentBatchSize = 0;
 
-            try {
-                const page = await pdf.getPage(i);
-                const scale = 1.5; 
-                const viewport = page.getViewport({ scale });
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                
-                if (!context) continue;
-                
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-                
-                await page.render({ canvasContext: context, viewport } as any).promise;
-                
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                const [mimePart, base64] = dataUrl.split(';base64,');
+            for (let i = 1; i <= pdf.numPages; i++) {
+                if (pageCountRef.current + i - 1 >= MAX_PAGES) break;
 
-                batch.push({
-                    id: Math.random().toString(36).substr(2, 9) + i,
-                    preview: dataUrl,
-                    base64Clean: base64,
-                    mimeType: 'image/jpeg',
-                    status: 'pending',
-                    result: null,
-                    error: null,
-                    fileName: `${file.name} - Page ${i}`
-                });
-                currentBatchSize++;
+                try {
+                    const page = await pdf.getPage(i);
+                    const scale = 1.5; 
+                    const viewport = page.getViewport({ scale });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    
+                    if (!context) continue;
+                    
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    
+                    await page.render({ canvasContext: context, viewport } as any).promise;
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    const [mimePart, base64] = dataUrl.split(';base64,');
 
-                if (currentBatchSize >= BATCH_SIZE || i === pdf.numPages || (pageCountRef.current + batch.length) >= MAX_PAGES) {
-                    onBatchLoaded([...batch]);
-                    batch = [];
-                    currentBatchSize = 0;
-                    await new Promise(r => setTimeout(r, 50));
+                    batch.push({
+                        id: Math.random().toString(36).substr(2, 9) + i,
+                        preview: dataUrl,
+                        base64Clean: base64,
+                        mimeType: 'image/jpeg',
+                        status: 'pending',
+                        result: null,
+                        error: null,
+                        fileName: `${file.name} - Page ${i}`
+                    });
+                    currentBatchSize++;
+
+                    if (currentBatchSize >= BATCH_SIZE || i === pdf.numPages || (pageCountRef.current + batch.length) >= MAX_PAGES) {
+                        onBatchLoaded([...batch]);
+                        batch = [];
+                        currentBatchSize = 0;
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+                } catch (err) {
+                    console.error(`Error rendering PDF page ${i}`, err);
                 }
-            } catch (err) {
-                console.error(`Error rendering PDF page ${i}`, err);
             }
+        } catch (error) {
+            console.error("Failed to load PDF library or process file:", error);
         }
     };
 
     const processZipBasedFile = async (file: File, onBatchLoaded: (newPages: PageData[]) => void) => {
-        const zip = await JSZip.loadAsync(file);
-        
-        const blobToBase64 = (blob: Blob): Promise<string> => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        };
-
-        const entries: any[] = [];
-        zip.forEach((relativePath: string, zipEntry: any) => {
-            if (!zipEntry.dir) {
-                const name = zipEntry.name.toLowerCase();
-                if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.webp')) {
-                    entries.push(zipEntry);
-                }
-            }
-        });
-
-        entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-
-        const BATCH_SIZE = 20;
-        let batch: PageData[] = [];
-        
-        for (let i = 0; i < entries.length; i++) {
-            if (pageCountRef.current >= MAX_PAGES) break;
-
-            const entry = entries[i];
-            try {
-                const blob = await entry.async('blob');
-                const fullBase64 = await blobToBase64(blob);
-                const mime = fullBase64.split(';base64,')[0].replace('data:', '');
-                const [_, base64Clean] = fullBase64.split(';base64,');
-
-                batch.push({
-                    id: Math.random().toString(36).substr(2, 9) + i,
-                    preview: fullBase64,
-                    base64Clean: base64Clean,
-                    mimeType: mime,
-                    status: 'pending',
-                    result: null,
-                    error: null,
-                    fileName: entry.name
+        try {
+            // Dynamically import JSZip from CDN to avoid build issues
+            // @ts-ignore
+            const { default: JSZip } = await import('https://esm.sh/jszip@3.10.1');
+            
+            const zip = await JSZip.loadAsync(file);
+            
+            const blobToBase64 = (blob: Blob): Promise<string> => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
                 });
-                
-                pageCountRef.current++;
+            };
 
-                if (batch.length >= BATCH_SIZE || i === entries.length - 1 || pageCountRef.current >= MAX_PAGES) {
-                    onBatchLoaded([...batch]);
-                    batch = [];
-                    await new Promise(r => setTimeout(r, 50));
+            const entries: any[] = [];
+            zip.forEach((relativePath: string, zipEntry: any) => {
+                if (!zipEntry.dir) {
+                    const name = zipEntry.name.toLowerCase();
+                    if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.webp')) {
+                        entries.push(zipEntry);
+                    }
                 }
-            } catch (e) {
-                console.error("Failed to load zip entry", entry.name);
+            });
+
+            entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+            const BATCH_SIZE = 20;
+            let batch: PageData[] = [];
+            
+            for (let i = 0; i < entries.length; i++) {
+                if (pageCountRef.current >= MAX_PAGES) break;
+
+                const entry = entries[i];
+                try {
+                    const blob = await entry.async('blob');
+                    const fullBase64 = await blobToBase64(blob);
+                    const mime = fullBase64.split(';base64,')[0].replace('data:', '');
+                    const [_, base64Clean] = fullBase64.split(';base64,');
+
+                    batch.push({
+                        id: Math.random().toString(36).substr(2, 9) + i,
+                        preview: fullBase64,
+                        base64Clean: base64Clean,
+                        mimeType: mime,
+                        status: 'pending',
+                        result: null,
+                        error: null,
+                        fileName: entry.name
+                    });
+                    
+                    pageCountRef.current++;
+
+                    if (batch.length >= BATCH_SIZE || i === entries.length - 1 || pageCountRef.current >= MAX_PAGES) {
+                        onBatchLoaded([...batch]);
+                        batch = [];
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+                } catch (e) {
+                    console.error("Failed to load zip entry", entry.name);
+                }
             }
+        } catch (error) {
+            console.error("Failed to load JSZip or process file:", error);
         }
     };
 

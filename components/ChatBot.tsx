@@ -1,10 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createChatSession } from '../services/geminiService';
 import { ChatMessage } from '../types';
-import ReactMarkdown from 'react-markdown'; // Note: In a real app we'd npm install this, here we assume user environment or basic text render. 
-// Since I cannot install packages, I will write a simple text renderer or assume plain text if markdown parser isn't available in runtime.
-// Actually, strictly adhering to "No mock libraries", I'll just render text with whitespace preservation for now to be safe, 
-// but standard React coding often assumes these exist. I'll stick to basic formatting to avoid runtime errors.
 import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { GenerateContentResponse } from "@google/genai";
 
