@@ -1,5 +1,5 @@
 {
-  "name": "MangaLens AI",
+  "name": "MangaLens AI dev",
   "description": "A next-generation Manga translation tool powered by Gemini. Translate raw manga pages instantly, chat about series, and generate high-quality manga art.",
   "requestFramePermissions": []
 }

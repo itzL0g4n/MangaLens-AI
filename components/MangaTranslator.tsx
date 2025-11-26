@@ -635,35 +635,6 @@ const MangaTranslator: React.FC = () => {
                                     const left = xmin / 10;
                                     const height = (ymax - ymin) / 10;
                                     const width = (xmax - xmin) / 10;
-                                    
-                                    // Smart positioning
-                                    const isTopHalf = ymin < 500;
-                                    const isFarLeft = xmin < 150;
-                                    const isFarRight = xmax > 850;
-                                    
-                                    let tooltipClasses = "absolute z-50 p-3 rounded-xl shadow-2xl backdrop-blur-md bg-stone-900/95 border border-stone-700 text-white text-sm leading-relaxed pointer-events-auto cursor-text";
-                                    let transformOrigin = "center";
-                                    
-                                    // Vertical Position: If in top half, show below (top-full). If in bottom half, show above (bottom-full).
-                                    if (isTopHalf) {
-                                        tooltipClasses += " top-full mt-2";
-                                        transformOrigin = "top";
-                                    } else {
-                                        tooltipClasses += " bottom-full mb-2";
-                                        transformOrigin = "bottom";
-                                    }
-                                    
-                                    // Horizontal Alignment: If too far left/right, align to edge.
-                                    if (isFarLeft) {
-                                        tooltipClasses += " left-0";
-                                        transformOrigin += " left";
-                                    } else if (isFarRight) {
-                                        tooltipClasses += " right-0";
-                                        transformOrigin += " right";
-                                    } else {
-                                        tooltipClasses += " left-1/2 -translate-x-1/2";
-                                        transformOrigin += " center";
-                                    }
 
                                     return (
                                         <div
@@ -684,11 +655,9 @@ const MangaTranslator: React.FC = () => {
                                         >
                                             {hoveredBubbleId === bubble.id && (
                                                  <div 
-                                                    className={`${tooltipClasses} min-w-[200px] max-w-[400px] max-h-[300px] overflow-y-auto custom-scrollbar`}
-                                                    style={{ transform: `scale(${1/zoom})`, transformOrigin }}
-                                                    onMouseDown={(e) => e.stopPropagation()} // Allow selecting text without dragging image
+                                                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-stone-950/95 backdrop-blur-sm text-xs px-3 py-2 rounded-lg text-white z-50 border border-stone-700 shadow-2xl min-w-[100px] max-w-[280px] whitespace-normal text-center pointer-events-none"
+                                                    style={{ transform: `scale(${1/zoom})`, transformOrigin: 'bottom center' }}
                                                  >
-                                                    <div className="font-semibold text-indigo-300 text-xs mb-1 uppercase tracking-wider">{bubble.speaker || "Unknown"}</div>
                                                     {bubble.translatedText}
                                                  </div>
                                             )}
