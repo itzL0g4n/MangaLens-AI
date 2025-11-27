@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, ScanEye, X, ZoomIn, ZoomOut, RotateCcw, AlertCircle, Layers, ChevronLeft, ChevronRight, Plus, Trash2, CheckCircle2, Globe, Search, Edit, Play, Square } from 'lucide-react';
 import { translateMangaPage, identifyMangaTitle, getMangaContext } from '../services/geminiService';
 import { AnalysisResult, MangaContext } from '../types';
+import { Language } from '../translations';
 
 interface PageData {
     id: string;
@@ -37,7 +38,12 @@ const LANGUAGES = [
     { code: "hi", name: "Hindi" }
 ];
 
-const MangaTranslator: React.FC = () => {
+interface MangaTranslatorProps {
+    lang: Language;
+    t: any;
+}
+
+const MangaTranslator: React.FC<MangaTranslatorProps> = ({ lang, t }) => {
     const [pages, setPages] = useState<PageData[]>([]);
     const [currentIndex, setCurrentIndex] = useState<number>(0);
     const [hoveredBubbleId, setHoveredBubbleId] = useState<string | null>(null);
@@ -76,6 +82,15 @@ const MangaTranslator: React.FC = () => {
         isProcessingFilesRef.current = isProcessingFiles;
     }, [isProcessingFiles]);
 
+    // Auto-update target language when app language changes
+    useEffect(() => {
+        if (lang === 'vi') {
+            setTargetLanguage('Vietnamese');
+        } else if (lang === 'en') {
+            setTargetLanguage('English');
+        }
+    }, [lang]);
+
     // Reset zoom when changing pages
     useEffect(() => {
         setZoom(1);
@@ -95,16 +110,10 @@ const MangaTranslator: React.FC = () => {
 
     // --- Zoom Handlers ---
     const handleWheel = (e: React.WheelEvent) => {
-        // Simple scroll to zoom logic
         if (pages.length === 0) return;
-        
-        // Only zoom if we are hovering over the image area, effectively
         const delta = -e.deltaY * 0.001;
-        const newZoom = Math.min(Math.max(1, zoom + delta * 2), 5); // Increased sensitivity slightly
-        
+        const newZoom = Math.min(Math.max(1, zoom + delta * 2), 5);
         setZoom(newZoom);
-        
-        // If zooming out to 1, reset pan
         if (newZoom === 1) {
             setPan({ x: 0, y: 0 });
         }
@@ -114,7 +123,7 @@ const MangaTranslator: React.FC = () => {
         if (zoom > 1) {
             setIsDragging(true);
             dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-            e.preventDefault(); // Prevent text selection
+            e.preventDefault();
         }
     };
 
@@ -131,7 +140,8 @@ const MangaTranslator: React.FC = () => {
     };
 
     // --- File Processing ---
-
+    // (File processing logic remains identical to previous version, just omitting for brevity if not changed, but must include full file content in XML)
+    
     const processImageFile = (file: File): Promise<PageData> => {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -155,7 +165,6 @@ const MangaTranslator: React.FC = () => {
 
     const processPdfFile = async (file: File, onBatchLoaded: (newPages: PageData[]) => void) => {
         try {
-            // Dynamically import PDF.js from CDN to bypass local build 'Top-level await' errors
             // @ts-ignore
             const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379');
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
@@ -216,7 +225,6 @@ const MangaTranslator: React.FC = () => {
 
     const processZipBasedFile = async (file: File, onBatchLoaded: (newPages: PageData[]) => void) => {
         try {
-            // Dynamically import JSZip from CDN to avoid build issues
             // @ts-ignore
             const { default: JSZip } = await import('https://esm.sh/jszip@3.10.1');
             
@@ -286,12 +294,10 @@ const MangaTranslator: React.FC = () => {
     const processKindleFile = async (file: File, onBatchLoaded: (newPages: PageData[]) => void) => {
         const buffer = await file.arrayBuffer();
         const data = new Uint8Array(buffer);
-        
         const readBE32 = (offset: number) => (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
         const readBE16 = (offset: number) => (data[offset] << 8) | data[offset + 1];
 
         if (data.length < 80) return;
-
         const numRecords = readBE16(76);
         const recordInfoListStart = 78;
         
@@ -304,17 +310,14 @@ const MangaTranslator: React.FC = () => {
         }
 
         const sortedOffsets = [...offsets, data.length].sort((a, b) => a - b);
-        
         const BATCH_SIZE = 20;
         let batch: PageData[] = [];
         let imagesFound = 0;
 
         for (let i = 0; i < sortedOffsets.length - 1; i++) {
             if (pageCountRef.current >= MAX_PAGES) break;
-
             const start = sortedOffsets[i];
             const end = sortedOffsets[i + 1];
-            
             if (start >= data.length || end > data.length || start >= end) continue;
             
             let mimeType: string | null = null;
@@ -332,7 +335,6 @@ const MangaTranslator: React.FC = () => {
                 try {
                     const blob = new Blob([data.subarray(start, end)], { type: mimeType });
                     const reader = new FileReader();
-                    
                     const base64Data = await new Promise<{preview: string, clean: string}>((resolve, reject) => {
                         reader.onloadend = () => {
                             const res = reader.result as string;
@@ -344,7 +346,6 @@ const MangaTranslator: React.FC = () => {
                     });
 
                     imagesFound++;
-                    
                     batch.push({
                         id: Math.random().toString(36).substr(2, 9) + imagesFound,
                         preview: base64Data.preview,
@@ -355,88 +356,42 @@ const MangaTranslator: React.FC = () => {
                         error: null,
                         fileName: `${file.name} - Img ${imagesFound}.${ext}`
                     });
-                    
                     pageCountRef.current++;
-
                     if (batch.length >= BATCH_SIZE || pageCountRef.current >= MAX_PAGES) {
                          onBatchLoaded([...batch]);
                          batch = [];
                          await new Promise(r => setTimeout(r, 50));
                     }
-
                 } catch (e) {
                     console.error("Failed to process image record", i);
                 }
             }
         }
-        
-        if (batch.length > 0) {
-            onBatchLoaded(batch);
-        }
+        if (batch.length > 0) onBatchLoaded(batch);
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
-        
         setIsProcessingFiles(true);
         try {
             const files: File[] = Array.from(e.target.files);
-            
             for (const file of files) {
                 if (pageCountRef.current >= MAX_PAGES) {
                     alert(`Maximum limit of ${MAX_PAGES} pages reached.`);
                     break;
                 }
-
                 const lowerName = file.name.toLowerCase();
-
                 if (file.type === 'application/pdf') {
-                    await processPdfFile(file, (newPages) => {
-                         setPages(prev => {
-                            const updated = [...prev, ...newPages];
-                            pageCountRef.current = updated.length;
-                            return updated;
-                        });
-                    });
-                } else if (
-                    file.type === 'application/epub+zip' || 
-                    file.type === 'application/x-cbz' || 
-                    lowerName.endsWith('.cbz') || 
-                    lowerName.endsWith('.epub')
-                ) {
-                    await processZipBasedFile(file, (newPages) => {
-                        setPages(prev => {
-                           const updated = [...prev, ...newPages];
-                           pageCountRef.current = updated.length;
-                           return updated;
-                       });
-                   });
-                } else if (
-                    lowerName.endsWith('.azw3') || 
-                    lowerName.endsWith('.mobi') || 
-                    lowerName.endsWith('.azw')
-                ) {
-                    await processKindleFile(file, (newPages) => {
-                        setPages(prev => {
-                           const updated = [...prev, ...newPages];
-                           pageCountRef.current = updated.length;
-                           return updated;
-                       });
-                    });
+                    await processPdfFile(file, (newPages) => setPages(prev => { const updated = [...prev, ...newPages]; pageCountRef.current = updated.length; return updated; }));
+                } else if (file.type === 'application/epub+zip' || file.type === 'application/x-cbz' || lowerName.endsWith('.cbz') || lowerName.endsWith('.epub')) {
+                    await processZipBasedFile(file, (newPages) => setPages(prev => { const updated = [...prev, ...newPages]; pageCountRef.current = updated.length; return updated; }));
+                } else if (lowerName.endsWith('.azw3') || lowerName.endsWith('.mobi') || lowerName.endsWith('.azw')) {
+                    await processKindleFile(file, (newPages) => setPages(prev => { const updated = [...prev, ...newPages]; pageCountRef.current = updated.length; return updated; }));
                 } else if (file.type.startsWith('image/')) {
                     const imagePage = await processImageFile(file);
-                    setPages(prev => {
-                        if (prev.length >= MAX_PAGES) return prev;
-                        const updated = [...prev, imagePage];
-                        pageCountRef.current = updated.length;
-                        return updated;
-                    });
+                    setPages(prev => { if (prev.length >= MAX_PAGES) return prev; const updated = [...prev, imagePage]; pageCountRef.current = updated.length; return updated; });
                 }
             }
-            
-            if (currentIndex === 0 && pages.length === 0) {
-            }
-
         } catch (error) {
             console.error("Error processing files:", error);
             alert("Failed to process some files.");
@@ -448,22 +403,11 @@ const MangaTranslator: React.FC = () => {
 
     const translateSinglePage = async (index: number): Promise<void> => {
         const page = pagesRef.current[index];
-        // FIX: Removed condition that prevented 'complete' pages from re-translating.
         if (!page || page.status === 'analyzing') return;
-
         updatePage(index, { status: 'analyzing', error: null });
-
         try {
-            const contextString = seriesContext 
-                ? `Series Title: ${seriesContext.title}\nKey Context & Terminology:\n${seriesContext.info}` 
-                : undefined;
-
-            const data = await translateMangaPage(
-                page.base64Clean, 
-                page.mimeType, 
-                contextString,
-                targetLanguage
-            );
+            const contextString = seriesContext ? `Series Title: ${seriesContext.title}\nKey Context & Terminology:\n${seriesContext.info}` : undefined;
+            const data = await translateMangaPage(page.base64Clean, page.mimeType, contextString, targetLanguage);
             updatePage(index, { status: 'complete', result: data });
         } catch (err) {
             updatePage(index, { status: 'error', error: "Translation failed. Click to retry." });
@@ -471,41 +415,23 @@ const MangaTranslator: React.FC = () => {
     };
 
     const handleBulkTranslate = async () => {
-        // Toggle Logic: If already translating, stop.
         if (isBulkTranslating) {
             shouldStopBulkRef.current = true;
             return;
         }
-        
         setIsBulkTranslating(true);
         shouldStopBulkRef.current = false;
-        
         try {
             while (true) {
-                // Check if user requested stop
-                if (shouldStopBulkRef.current) {
-                    break;
-                }
-
+                if (shouldStopBulkRef.current) break;
                 const currentPages = pagesRef.current;
                 const pendingIndex = currentPages.findIndex(p => p.status === 'pending');
-                
                 if (pendingIndex === -1) {
-                    // No pending pages found.
-                    // If files are still loading, wait a bit and check again.
                     if (isProcessingFilesRef.current) {
                         await new Promise(resolve => setTimeout(resolve, 1000));
                         continue;
-                    } else {
-                        // Truly finished
-                        break;
-                    }
+                    } else break;
                 }
-
-                // CRITICAL CHANGE: Do NOT set currentIndex.
-                // This allows background processing without moving the user's view.
-                // setCurrentIndex(pendingIndex); 
-                
                 await translateSinglePage(pendingIndex);
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
@@ -515,13 +441,10 @@ const MangaTranslator: React.FC = () => {
         }
     };
 
-    const handleAnalyze = () => {
-        translateSinglePage(currentIndex);
-    };
+    const handleAnalyze = () => translateSinglePage(currentIndex);
 
     const handleDetectContext = async () => {
         if (!currentPage || isContextLoading) return;
-        
         setIsContextLoading(true);
         try {
             const title = await identifyMangaTitle(currentPage.base64Clean, currentPage.mimeType);
@@ -536,53 +459,32 @@ const MangaTranslator: React.FC = () => {
     };
 
     const handleManualContext = () => {
-        setSeriesContext({
-            title: '',
-            info: '',
-            sources: []
-        });
+        setSeriesContext({ title: '', info: '', sources: [] });
         setShowContext(true);
     };
 
-    const updatePage = (index: number, updates: Partial<PageData>) => {
-        setPages(prev => prev.map((p, i) => i === index ? { ...p, ...updates } : p));
-    };
-
+    const updatePage = (index: number, updates: Partial<PageData>) => setPages(prev => prev.map((p, i) => i === index ? { ...p, ...updates } : p));
+    
     const removePage = (index: number, e?: React.MouseEvent) => {
         e?.stopPropagation();
         const isCurrent = index === currentIndex;
         const isLast = index === pages.length - 1;
-        
-        setPages(prev => {
-            const updated = prev.filter((_, i) => i !== index);
-            pageCountRef.current = updated.length;
-            return updated;
-        });
-        
+        setPages(prev => { const updated = prev.filter((_, i) => i !== index); pageCountRef.current = updated.length; return updated; });
         if (isCurrent) {
-            if (isLast && index > 0) {
-                setCurrentIndex(index - 1);
-            }
-        } else if (index < currentIndex) {
-            setCurrentIndex(curr => curr - 1);
-        }
+            if (isLast && index > 0) setCurrentIndex(index - 1);
+        } else if (index < currentIndex) setCurrentIndex(curr => curr - 1);
     };
 
     const navigate = (direction: 'prev' | 'next') => {
-        if (direction === 'prev') {
-            setCurrentIndex(curr => Math.max(0, curr - 1));
-        } else {
-            setCurrentIndex(curr => Math.min(pages.length - 1, curr + 1));
-        }
+        if (direction === 'prev') setCurrentIndex(curr => Math.max(0, curr - 1));
+        else setCurrentIndex(curr => Math.min(pages.length - 1, curr + 1));
     };
 
     const pendingCount = pages.filter(p => p.status === 'pending').length;
 
     return (
         <div className="flex h-full w-full flex-col md:flex-row bg-stone-900 text-white overflow-hidden">
-            {/* Left Panel: Image View */}
             <div className="relative flex-1 bg-stone-950 flex flex-col overflow-hidden">
-                {/* Main Viewer */}
                 <div 
                     className="flex-1 relative flex items-center justify-center p-4 overflow-hidden bg-stone-950"
                     onWheel={handleWheel}
@@ -601,15 +503,15 @@ const MangaTranslator: React.FC = () => {
                             {isProcessingFiles ? (
                                 <div className="flex flex-col items-center animate-pulse">
                                     <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                                    <p className="text-lg font-medium text-indigo-400">Processing Files...</p>
-                                    <p className="text-sm text-stone-500 mt-2">Loading first 20 pages...</p>
+                                    <p className="text-lg font-medium text-indigo-400">{t.translator.upload.processing}</p>
+                                    <p className="text-sm text-stone-500 mt-2">{t.translator.upload.loading}</p>
                                 </div>
                             ) : (
                                 <>
                                     <Upload className="w-12 h-12 mb-4 group-hover:scale-110 transition-transform" />
-                                    <p className="text-lg font-medium">Upload Manga Pages</p>
-                                    <p className="text-sm mt-2 opacity-70">PDF, EPUB, CBZ, AZW3/MOBI, Images</p>
-                                    <p className="text-xs mt-4 bg-stone-900 px-3 py-1 rounded-full border border-stone-800">Max {MAX_PAGES} pages</p>
+                                    <p className="text-lg font-medium">{t.translator.upload.title}</p>
+                                    <p className="text-sm mt-2 opacity-70">{t.translator.upload.subtitle}</p>
+                                    <p className="text-xs mt-4 bg-stone-900 px-3 py-1 rounded-full border border-stone-800">{t.translator.upload.max.replace('{max}', MAX_PAGES.toString())}</p>
                                 </>
                             )}
                             <input 
@@ -623,7 +525,6 @@ const MangaTranslator: React.FC = () => {
                         </div>
                     ) : (
                         <>
-                            {/* Main Image Container with Transforms */}
                             <div 
                                 className="relative h-fit w-fit shadow-2xl transition-transform duration-75 ease-out will-change-transform origin-center"
                                 style={{
@@ -636,8 +537,6 @@ const MangaTranslator: React.FC = () => {
                                     alt={`Page ${currentIndex + 1}`} 
                                     className="max-h-[calc(90vh-8rem)] w-auto h-auto max-w-full rounded-lg shadow-stone-900/50 block select-none pointer-events-none"
                                 />
-                                
-                                {/* Overlays */}
                                 {currentPage.status === 'complete' && currentPage.result?.bubbles.map((bubble) => {
                                     if (!bubble.boundingBox) return null;
                                     const { ymin, xmin, ymax, xmax } = bubble.boundingBox;
@@ -676,79 +575,49 @@ const MangaTranslator: React.FC = () => {
                                 })}
                             </div>
 
-                            {/* Zoom Controls */}
                             <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-30">
-                                <button 
-                                    onClick={() => setZoom(z => Math.min(5, z + 0.5))} 
-                                    className="p-2 bg-stone-800 hover:bg-stone-700 text-white rounded-lg shadow-lg border border-stone-700 transition-colors"
-                                    title="Zoom In"
-                                >
+                                <button onClick={() => setZoom(z => Math.min(5, z + 0.5))} className="p-2 bg-stone-800 hover:bg-stone-700 text-white rounded-lg shadow-lg border border-stone-700 transition-colors" title={t.translator.controls.zoomIn}>
                                     <ZoomIn className="w-5 h-5" />
                                 </button>
-                                <button 
-                                    onClick={() => setZoom(z => Math.max(1, z - 0.5))} 
-                                    className="p-2 bg-stone-800 hover:bg-stone-700 text-white rounded-lg shadow-lg border border-stone-700 transition-colors"
-                                    title="Zoom Out"
-                                >
+                                <button onClick={() => setZoom(z => Math.max(1, z - 0.5))} className="p-2 bg-stone-800 hover:bg-stone-700 text-white rounded-lg shadow-lg border border-stone-700 transition-colors" title={t.translator.controls.zoomOut}>
                                     <ZoomOut className="w-5 h-5" />
                                 </button>
-                                <button 
-                                    onClick={() => { setZoom(1); setPan({x:0, y:0}); }} 
-                                    className="p-2 bg-stone-800 hover:bg-stone-700 text-white rounded-lg shadow-lg border border-stone-700 transition-colors"
-                                    title="Reset View"
-                                >
+                                <button onClick={() => { setZoom(1); setPan({x:0, y:0}); }} className="p-2 bg-stone-800 hover:bg-stone-700 text-white rounded-lg shadow-lg border border-stone-700 transition-colors" title={t.translator.controls.reset}>
                                     <RotateCcw className="w-5 h-5" />
                                 </button>
                             </div>
 
-                            {/* Navigation Arrows */}
                             {currentIndex > 0 && (
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); navigate('prev'); }}
-                                    className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-stone-900/80 hover:bg-stone-800 rounded-full text-white shadow-lg backdrop-blur-sm transition-all hover:scale-110 z-20"
-                                >
+                                <button onClick={(e) => { e.stopPropagation(); navigate('prev'); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-stone-900/80 hover:bg-stone-800 rounded-full text-white shadow-lg backdrop-blur-sm transition-all hover:scale-110 z-20" title={t.translator.controls.prev}>
                                     <ChevronLeft className="w-6 h-6" />
                                 </button>
                             )}
                             {currentIndex < pages.length - 1 && (
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); navigate('next'); }}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-stone-900/80 hover:bg-stone-800 rounded-full text-white shadow-lg backdrop-blur-sm transition-all hover:scale-110 z-20"
-                                >
+                                <button onClick={(e) => { e.stopPropagation(); navigate('next'); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-stone-900/80 hover:bg-stone-800 rounded-full text-white shadow-lg backdrop-blur-sm transition-all hover:scale-110 z-20" title={t.translator.controls.next}>
                                     <ChevronRight className="w-6 h-6" />
                                 </button>
                             )}
 
-                            {/* Contextual Actions */}
                             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
                                 {currentPage.status !== 'analyzing' && !isBulkTranslating && (
                                     <>
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); handleAnalyze(); }}
-                                            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-full shadow-lg font-semibold transition-all hover:scale-105"
-                                        >
+                                        <button onClick={(e) => { e.stopPropagation(); handleAnalyze(); }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-full shadow-lg font-semibold transition-all hover:scale-105">
                                             <ScanEye className="w-5 h-5" />
-                                            {currentPage.status === 'complete' ? 'Retranslate' : (currentPage.status === 'error' ? 'Retry' : 'Translate Page')}
+                                            {currentPage.status === 'complete' ? t.translator.controls.retranslate : (currentPage.status === 'error' ? t.translator.controls.retry : t.translator.controls.translate)}
                                         </button>
                                     </>
                                 )}
                                 {currentPage.status === 'analyzing' && (
                                     <div className="flex items-center gap-2 bg-stone-800 px-6 py-3 rounded-full shadow-lg border border-stone-700">
                                         <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                                        <span className="text-stone-300 animate-pulse">Reading...</span>
+                                        <span className="text-stone-300 animate-pulse">{t.translator.controls.reading}</span>
                                     </div>
                                 )}
-                                <button 
-                                    onClick={(e) => removePage(currentIndex, e)}
-                                    disabled={isBulkTranslating}
-                                    className="flex items-center gap-2 bg-stone-800 hover:bg-red-900/50 text-stone-300 hover:text-red-200 px-4 py-3 rounded-full shadow-lg border border-stone-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Remove Page"
-                                >
+                                <button onClick={(e) => removePage(currentIndex, e)} disabled={isBulkTranslating} className="flex items-center gap-2 bg-stone-800 hover:bg-red-900/50 text-stone-300 hover:text-red-200 px-4 py-3 rounded-full shadow-lg border border-stone-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title={t.translator.controls.remove}>
                                     <Trash2 className="w-5 h-5" />
                                 </button>
                             </div>
                             
-                            {/* Error Overlay */}
                             {currentPage.error && (
                                 <div className="absolute top-6 right-6 bg-red-900/90 border border-red-700 text-red-100 p-4 rounded-lg shadow-xl flex items-center gap-3 animate-bounce z-50">
                                     <AlertCircle className="w-5 h-5" />
@@ -759,183 +628,85 @@ const MangaTranslator: React.FC = () => {
                     )}
                 </div>
 
-                {/* Thumbnails Strip */}
                 {pages.length > 0 && (
                     <div className="h-24 bg-stone-900 border-t border-stone-800 flex items-center px-4 gap-3 overflow-x-auto shrink-0 hide-scrollbar z-40" ref={scrollContainerRef}>
                          <div className="flex-shrink-0 flex items-center gap-2 mr-2 border-r border-stone-800 pr-4">
                             <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">{pages.length}/{MAX_PAGES}</span>
                             {isProcessingFiles && <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />}
                         </div>
-
                         {pages.map((page, idx) => (
-                            <button
-                                key={page.id}
-                                onClick={() => setCurrentIndex(idx)}
-                                disabled={isBulkTranslating && currentPage.status === 'analyzing' && idx === currentIndex} // Only disable active page button if analyzing, otherwise allow preview
-                                className={`relative h-16 w-12 flex-shrink-0 rounded-md overflow-hidden border-2 transition-all group
-                                    ${currentIndex === idx ? 'border-indigo-500 ring-2 ring-indigo-500/20 scale-105' : 'border-stone-700 opacity-60 hover:opacity-100 hover:scale-105'}
-                                `}
-                            >
+                            <button key={page.id} onClick={() => setCurrentIndex(idx)} disabled={isBulkTranslating && currentPage.status === 'analyzing' && idx === currentIndex} className={`relative h-16 w-12 flex-shrink-0 rounded-md overflow-hidden border-2 transition-all group ${currentIndex === idx ? 'border-indigo-500 ring-2 ring-indigo-500/20 scale-105' : 'border-stone-700 opacity-60 hover:opacity-100 hover:scale-105'}`}>
                                 <img src={page.preview} className="h-full w-full object-cover" alt={`Thumb ${idx}`} />
-                                
-                                {/* Mini Status Icons */}
-                                {page.status === 'analyzing' && (
-                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    </div>
-                                )}
-                                {page.status === 'complete' && (
-                                    <div className="absolute top-0 right-0 bg-green-500 text-white p-[1px] rounded-bl-md">
-                                        <CheckCircle2 className="w-3 h-3" />
-                                    </div>
-                                )}
-                                {page.error && (
-                                    <div className="absolute inset-0 bg-red-900/50 flex items-center justify-center">
-                                        <AlertCircle className="w-4 h-4 text-red-200" />
-                                    </div>
-                                )}
-                                
-                                {/* Page Number */}
-                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-center text-white py-0.5 truncate px-0.5">
-                                    {idx + 1}
-                                </div>
+                                {page.status === 'analyzing' && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /></div>}
+                                {page.status === 'complete' && <div className="absolute top-0 right-0 bg-green-500 text-white p-[1px] rounded-bl-md"><CheckCircle2 className="w-3 h-3" /></div>}
+                                {page.error && <div className="absolute inset-0 bg-red-900/50 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-red-200" /></div>}
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-center text-white py-0.5 truncate px-0.5">{idx + 1}</div>
                             </button>
                         ))}
-                        
                         {pages.length < MAX_PAGES && (
                             <>
                                 <div className="h-12 w-[1px] bg-stone-700 mx-1" />
-                                <button 
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={isProcessingFiles || isBulkTranslating}
-                                    className="h-16 w-12 flex-shrink-0 rounded-md border-2 border-dashed border-stone-700 flex flex-col items-center justify-center text-stone-500 hover:text-indigo-400 hover:border-indigo-400 transition-all hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Add Pages"
-                                >
-                                    {isProcessingFiles ? (
-                                        <div className="w-4 h-4 border-2 border-stone-500 border-t-transparent rounded-full animate-spin" />
-                                    ) : (
-                                        <>
-                                            <Plus className="w-5 h-5" />
-                                            <span className="text-[8px] font-bold uppercase mt-1">Add</span>
-                                        </>
-                                    )}
+                                <button onClick={() => fileInputRef.current?.click()} disabled={isProcessingFiles || isBulkTranslating} className="h-16 w-12 flex-shrink-0 rounded-md border-2 border-dashed border-stone-700 flex flex-col items-center justify-center text-stone-500 hover:text-indigo-400 hover:border-indigo-400 transition-all hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed" title={t.translator.upload.add}>
+                                    {isProcessingFiles ? <div className="w-4 h-4 border-2 border-stone-500 border-t-transparent rounded-full animate-spin" /> : <><Plus className="w-5 h-5" /><span className="text-[8px] font-bold uppercase mt-1">{t.translator.upload.add}</span></>}
                                 </button>
                             </>
                         )}
-                        
-                        <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            onChange={handleFileChange} 
-                            accept="image/png, image/jpeg, application/pdf, .epub, .cbz, application/epub+zip, application/x-cbz, .azw3, .mobi, .azw" 
-                            multiple
-                            className="hidden" 
-                        />
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/png, image/jpeg, application/pdf, .epub, .cbz, application/epub+zip, application/x-cbz, .azw3, .mobi, .azw" multiple className="hidden" />
                     </div>
                 )}
             </div>
 
-            {/* Right Panel: Context & Transcript */}
             <div className="w-full md:w-96 bg-stone-900 border-l border-stone-800 flex flex-col h-[40vh] md:h-full shadow-2xl z-10">
-                {/* 1. Series Context Section (Fixed/Collapsible) */}
                 {currentPage && (
                     <div className="border-b border-stone-800 bg-stone-900 shrink-0">
-                        <button 
-                            onClick={() => setShowContext(!showContext)}
-                            className="w-full p-4 flex items-center justify-between text-xs font-bold uppercase text-stone-500 hover:text-stone-300 transition-colors"
-                        >
-                            <span className="flex items-center gap-2">
-                                <Globe className="w-4 h-4" />
-                                Series Context
-                            </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded transition-colors ${seriesContext ? 'bg-indigo-900 text-indigo-200' : 'bg-stone-800'}`}>
-                                {seriesContext ? 'Active' : 'None'}
-                            </span>
+                        <button onClick={() => setShowContext(!showContext)} className="w-full p-4 flex items-center justify-between text-xs font-bold uppercase text-stone-500 hover:text-stone-300 transition-colors">
+                            <span className="flex items-center gap-2"><Globe className="w-4 h-4" />{t.translator.context.button}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded transition-colors ${seriesContext ? 'bg-indigo-900 text-indigo-200' : 'bg-stone-800'}`}>{seriesContext ? t.translator.context.active : t.translator.context.none}</span>
                         </button>
 
                         {showContext && (
                             <div className="px-4 pb-4 bg-stone-900/50 max-h-[30vh] overflow-y-auto">
                                 {!seriesContext ? (
                                     <div className="text-center py-4 border border-dashed border-stone-800 rounded-lg">
-                                        <p className="text-stone-500 text-xs mb-3 px-2">
-                                            Identify this manga series or add manual lore to improve translation accuracy.
-                                        </p>
+                                        <p className="text-stone-500 text-xs mb-3 px-2">{t.translator.context.empty}</p>
                                         <div className="flex flex-col gap-2 items-center w-full px-4">
-                                            <button 
-                                                onClick={handleDetectContext}
-                                                disabled={isContextLoading || isBulkTranslating}
-                                                className="w-full text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-full flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                                            >
-                                                {isContextLoading ? (
-                                                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                ) : (
-                                                    <Search className="w-3 h-3" />
-                                                )}
-                                                {isContextLoading ? 'Detecting...' : 'Auto-Detect Series'}
+                                            <button onClick={handleDetectContext} disabled={isContextLoading || isBulkTranslating} className="w-full text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-full flex items-center justify-center gap-2 transition-all disabled:opacity-50">
+                                                {isContextLoading ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Search className="w-3 h-3" />}
+                                                {isContextLoading ? t.translator.context.detecting : t.translator.context.detectBtn}
                                             </button>
-                                            
                                             <div className="flex items-center w-full gap-2">
                                                 <div className="h-[1px] flex-1 bg-stone-800"></div>
-                                                <span className="text-[9px] text-stone-600 font-bold uppercase">OR</span>
+                                                <span className="text-[9px] text-stone-600 font-bold uppercase">{t.translator.context.or}</span>
                                                 <div className="h-[1px] flex-1 bg-stone-800"></div>
                                             </div>
-
-                                            <button 
-                                                onClick={handleManualContext}
-                                                className="w-full text-xs bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 hover:border-stone-600 px-3 py-2 rounded-full flex items-center justify-center gap-2 transition-all"
-                                            >
+                                            <button onClick={handleManualContext} className="w-full text-xs bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 hover:border-stone-600 px-3 py-2 rounded-full flex items-center justify-center gap-2 transition-all">
                                                 <Edit className="w-3 h-3" />
-                                                Enter Manually
+                                                {t.translator.context.manualBtn}
                                             </button>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                                         <div>
-                                            <label className="text-[10px] text-indigo-400 font-bold uppercase">Series Title</label>
-                                            <input 
-                                                type="text" 
-                                                value={seriesContext.title}
-                                                onChange={(e) => setSeriesContext({...seriesContext, title: e.target.value})}
-                                                placeholder="e.g. One Piece"
-                                                className="w-full bg-stone-800 border border-stone-700 rounded px-2 py-1 text-sm text-white focus:border-indigo-500 focus:outline-none mt-1 placeholder-stone-600"
-                                            />
+                                            <label className="text-[10px] text-indigo-400 font-bold uppercase">{t.translator.context.titleLabel}</label>
+                                            <input type="text" value={seriesContext.title} onChange={(e) => setSeriesContext({...seriesContext, title: e.target.value})} placeholder={t.translator.context.titlePlaceholder} className="w-full bg-stone-800 border border-stone-700 rounded px-2 py-1 text-sm text-white focus:border-indigo-500 focus:outline-none mt-1 placeholder-stone-600" />
                                         </div>
                                         <div>
-                                            <label className="text-[10px] text-indigo-400 font-bold uppercase">Context / Lore / Terminology</label>
-                                            <textarea 
-                                                value={seriesContext.info}
-                                                onChange={(e) => setSeriesContext({...seriesContext, info: e.target.value})}
-                                                rows={5}
-                                                placeholder="Add character names, relationships, or specific terms here to guide the translator..."
-                                                className="w-full bg-stone-800 border border-stone-700 rounded px-2 py-1 text-xs text-stone-300 focus:border-indigo-500 focus:outline-none mt-1 resize-none placeholder-stone-600 leading-relaxed"
-                                            />
+                                            <label className="text-[10px] text-indigo-400 font-bold uppercase">{t.translator.context.infoLabel}</label>
+                                            <textarea value={seriesContext.info} onChange={(e) => setSeriesContext({...seriesContext, info: e.target.value})} rows={5} placeholder={t.translator.context.infoPlaceholder} className="w-full bg-stone-800 border border-stone-700 rounded px-2 py-1 text-xs text-stone-300 focus:border-indigo-500 focus:outline-none mt-1 resize-none placeholder-stone-600 leading-relaxed" />
                                         </div>
                                         {seriesContext.sources.length > 0 && (
                                             <div>
-                                                <label className="text-[10px] text-stone-500 font-bold uppercase">Sources</label>
+                                                <label className="text-[10px] text-stone-500 font-bold uppercase">{t.translator.context.sourcesLabel}</label>
                                                 <div className="flex flex-wrap gap-2 mt-1">
                                                     {seriesContext.sources.map((source, i) => (
-                                                        <a 
-                                                            key={i}
-                                                            href={source.uri}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="text-[10px] text-indigo-400 hover:underline truncate max-w-full block"
-                                                        >
-                                                            {source.title || source.uri}
-                                                        </a>
+                                                        <a key={i} href={source.uri} target="_blank" rel="noreferrer" className="text-[10px] text-indigo-400 hover:underline truncate max-w-full block">{source.title || source.uri}</a>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
                                         <div className="flex justify-end">
-                                            <button 
-                                                onClick={() => setSeriesContext(null)}
-                                                className="text-[10px] text-red-400 hover:text-red-300 hover:underline"
-                                            >
-                                                Clear Context
-                                            </button>
+                                            <button onClick={() => setSeriesContext(null)} className="text-[10px] text-red-400 hover:text-red-300 hover:underline">{t.translator.context.clear}</button>
                                         </div>
                                     </div>
                                 )}
@@ -947,113 +718,58 @@ const MangaTranslator: React.FC = () => {
                 {!currentPage ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-stone-600 p-8 text-center">
                         <Layers className="w-12 h-12 mb-4 opacity-20" />
-                        <p>Upload a page to start reading</p>
+                        <p>{t.translator.emptyState.waiting}</p>
                     </div>
                 ) : (
                     <>
-                        {/* 2. Page Header Block (Header + Stationary Summary) */}
                         <div className="shrink-0 bg-stone-900 z-20 shadow-sm">
                             <div className="p-6 border-b border-stone-800 flex flex-col gap-3">
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <h2 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
-                                            Page {currentIndex + 1}
-                                        </h2>
-                                        <p className="text-xs text-stone-500 mt-1 max-w-[150px] truncate">
-                                            {currentPage.fileName || `Page ${currentIndex + 1}`}
-                                        </p>
+                                        <h2 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">Page {currentIndex + 1}</h2>
+                                        <p className="text-xs text-stone-500 mt-1 max-w-[150px] truncate">{currentPage.fileName || `Page ${currentIndex + 1}`}</p>
                                     </div>
-                                    {currentPage.status === 'complete' && (
-                                        <span className="bg-indigo-500/10 text-indigo-400 text-xs px-2 py-1 rounded border border-indigo-500/20">
-                                            {currentPage.result?.bubbles.length || 0} bubbles
-                                        </span>
-                                    )}
+                                    {currentPage.status === 'complete' && <span className="bg-indigo-500/10 text-indigo-400 text-xs px-2 py-1 rounded border border-indigo-500/20">{t.translator.header.bubbles.replace('{count}', (currentPage.result?.bubbles.length || 0).toString())}</span>}
                                 </div>
 
                                 <div className="relative">
-                                    <label className="text-[10px] text-stone-500 font-bold uppercase mb-1 block">Output Language</label>
+                                    <label className="text-[10px] text-stone-500 font-bold uppercase mb-1 block">{t.translator.header.langLabel}</label>
                                     <div className="relative group">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <Globe className="h-4 w-4 text-stone-400" />
-                                        </div>
-                                        <select 
-                                            value={targetLanguage}
-                                            onChange={(e) => setTargetLanguage(e.target.value)}
-                                            className="w-full bg-stone-800 border border-stone-700 text-white text-sm rounded-lg block pl-10 p-2.5 focus:ring-indigo-500 focus:border-indigo-500 appearance-none cursor-pointer hover:bg-stone-750 transition-colors"
-                                            disabled={currentPage.status === 'analyzing' || isBulkTranslating}
-                                        >
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Globe className="h-4 w-4 text-stone-400" /></div>
+                                        <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)} className="w-full bg-stone-800 border border-stone-700 text-white text-sm rounded-lg block pl-10 p-2.5 focus:ring-indigo-500 focus:border-indigo-500 appearance-none cursor-pointer hover:bg-stone-750 transition-colors" disabled={currentPage.status === 'analyzing' || isBulkTranslating}>
                                             {LANGUAGES.map(lang => (
-                                                <option key={lang.code} value={lang.name} className="bg-stone-900">
-                                                    {lang.name}
-                                                </option>
+                                                <option key={lang.code} value={lang.name} className="bg-stone-900">{lang.name}</option>
                                             ))}
                                         </select>
-                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-stone-500">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                        </div>
+                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-stone-500"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></div>
                                     </div>
                                 </div>
                                 
                                 {pendingCount > 0 && (
-                                    <button
-                                        onClick={handleBulkTranslate}
-                                        className={`w-full flex items-center justify-center gap-2 text-xs py-2 rounded-lg border transition-all ${
-                                            isBulkTranslating 
-                                            ? 'bg-red-900/30 hover:bg-red-900/50 text-red-200 border-red-800'
-                                            : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
-                                        }`}
-                                    >
-                                        {isBulkTranslating ? (
-                                            <>
-                                                <Square className="w-3 h-3 fill-current" />
-                                                Stop Translation
-                                                <div className="w-3 h-3 ml-2 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Play className="w-3 h-3" />
-                                                Translate Remaining ({pendingCount})
-                                            </>
-                                        )}
+                                    <button onClick={handleBulkTranslate} className={`w-full flex items-center justify-center gap-2 text-xs py-2 rounded-lg border transition-all ${isBulkTranslating ? 'bg-red-900/30 hover:bg-red-900/50 text-red-200 border-red-800' : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'}`}>
+                                        {isBulkTranslating ? <><Square className="w-3 h-3 fill-current" />{t.translator.header.stop}<div className="w-3 h-3 ml-2 border-2 border-red-400 border-t-transparent rounded-full animate-spin" /></> : <><Play className="w-3 h-3" />{t.translator.header.translateAll.replace('{count}', pendingCount.toString())}</>}
                                     </button>
                                 )}
                             </div>
 
-                            {/* Stationary Summary Section */}
                             {currentPage.status === 'complete' && currentPage.result && (
                                 <div className="p-4 bg-stone-900/30 border-b border-stone-800">
-                                    <h3 className="text-xs font-bold uppercase text-stone-500 mb-2">Page Summary</h3>
+                                    <h3 className="text-xs font-bold uppercase text-stone-500 mb-2">{t.translator.header.summaryTitle}</h3>
                                     <p className="text-sm text-stone-400 leading-relaxed">{currentPage.result.summary}</p>
                                 </div>
                             )}
                         </div>
 
-                        {/* 3. Scrollable Bubbles List */}
                         {currentPage.status === 'complete' && currentPage.result ? (
                             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                                 {currentPage.result.bubbles.map((bubble) => (
-                                    <div 
-                                        key={bubble.id}
-                                        onMouseEnter={() => setHoveredBubbleId(bubble.id)}
-                                        onMouseLeave={() => setHoveredBubbleId(null)}
-                                        className={`p-4 rounded-lg border transition-all duration-200 cursor-pointer
-                                            ${hoveredBubbleId === bubble.id 
-                                                ? 'bg-stone-800 border-pink-500/50 translate-x-1 shadow-lg' 
-                                                : 'bg-stone-800/40 border-stone-800 hover:border-stone-700'
-                                            }`}
-                                    >
+                                    <div key={bubble.id} onMouseEnter={() => setHoveredBubbleId(bubble.id)} onMouseLeave={() => setHoveredBubbleId(null)} className={`p-4 rounded-lg border transition-all duration-200 cursor-pointer ${hoveredBubbleId === bubble.id ? 'bg-stone-800 border-pink-500/50 translate-x-1 shadow-lg' : 'bg-stone-800/40 border-stone-800 hover:border-stone-700'}`}>
                                         <div className="flex justify-between items-start mb-2">
-                                            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-                                                {bubble.speaker || 'Unknown'}
-                                            </span>
+                                            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">{bubble.speaker || 'Unknown'}</span>
                                             <span className="text-[10px] text-stone-600 font-mono">{bubble.id}</span>
                                         </div>
-                                        <p className="text-white text-sm font-medium leading-relaxed mb-2">
-                                            {bubble.translatedText}
-                                        </p>
-                                        <p className="text-stone-500 text-xs italic border-t border-stone-700/50 pt-2 mt-2 font-serif">
-                                            {bubble.originalText}
-                                        </p>
+                                        <p className="text-white text-sm font-medium leading-relaxed mb-2">{bubble.translatedText}</p>
+                                        <p className="text-stone-500 text-xs italic border-t border-stone-700/50 pt-2 mt-2 font-serif">{bubble.originalText}</p>
                                     </div>
                                 ))}
                             </div>
@@ -1062,12 +778,12 @@ const MangaTranslator: React.FC = () => {
                                 {currentPage.status === 'analyzing' ? (
                                     <>
                                         <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
-                                        <p className="text-stone-400">Deciphering glyphs...</p>
+                                        <p className="text-stone-400">{t.translator.emptyState.deciphering}</p>
                                     </>
                                 ) : (
                                     <>
                                         <ScanEye className="w-12 h-12 mb-4 text-stone-700" />
-                                        <p className="text-stone-500">Click "Translate" to reveal the story</p>
+                                        <p className="text-stone-500">{t.translator.emptyState.waiting}</p>
                                     </>
                                 )}
                             </div>

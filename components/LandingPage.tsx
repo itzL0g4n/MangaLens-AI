@@ -1,11 +1,16 @@
 import React from 'react';
 import { ArrowRight, BookOpen, MessageCircle, Sparkles } from 'lucide-react';
+import { Language } from '../translations';
 
 interface LandingPageProps {
     onEnter: () => void;
+    lang: Language;
+    t: any;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onEnter, lang, t }) => {
+    const isEnterExiting = false; // State management for animation would be passed down or handled here, keeping it simple for now as per req
+
     return (
         <div className="h-screen w-screen bg-stone-950 relative overflow-hidden flex flex-col">
             {/* Ambient Background */}
@@ -28,24 +33,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                         </div>
 
                         <h1 className="text-4xl md:text-7xl font-bold text-white mb-4 md:mb-6 tracking-tight leading-tight">
-                            MangaLens <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">AI</span>
+                            {t.landing.hero}
                         </h1>
                         
                         <p className="text-base md:text-xl text-stone-400 mb-8 md:mb-12 max-w-xl md:max-w-2xl leading-relaxed">
-                            Experience manga like never before. Instant AI translation with context awareness and character consistency.
+                            {t.landing.subtitle}
                         </p>
 
                         {/* Feature Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 w-full max-w-2xl mb-10 md:mb-16">
                             <FeatureCard 
                                 icon={<BookOpen className="w-6 h-6 md:w-8 md:h-8 text-indigo-400" />}
-                                title="Smart Translate"
-                                desc="Reads PDF, EPUB, CBZ & Images. Retains formatting & bubbles."
+                                title={t.landing.features.translate.title}
+                                desc={t.landing.features.translate.desc}
                             />
                             <FeatureCard 
                                 icon={<MessageCircle className="w-6 h-6 md:w-8 md:h-8 text-pink-400" />}
-                                title="Lore Chat"
-                                desc="Deep dive into plots and characters with an expert AI companion."
+                                title={t.landing.features.chat.title}
+                                desc={t.landing.features.chat.desc}
                             />
                         </div>
 
@@ -54,7 +59,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                             onClick={onEnter}
                             className="group relative px-8 py-4 bg-white text-stone-950 rounded-full font-bold text-lg flex items-center gap-3 transition-all hover:scale-105 hover:shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)] active:scale-95"
                         >
-                            <span className="relative z-10">Launch App</span>
+                            <span className="relative z-10">{t.landing.cta}</span>
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10" />
                             <div className="absolute inset-0 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 opacity-0 group-hover:opacity-10 transition-opacity"></div>
                         </button>
@@ -63,7 +68,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
                     {/* Footer */}
                     <div className="mt-12 md:mt-16 text-stone-600 text-xs flex gap-4">
                         <span className="flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity cursor-help">
-                            <Sparkles className="w-3 h-3" /> Powered by Gemini 2.5 Flash & 3 Pro
+                            <Sparkles className="w-3 h-3" /> {t.landing.footer}
                         </span>
                     </div>
                 </div>

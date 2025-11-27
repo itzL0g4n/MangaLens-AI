@@ -1,31 +1,50 @@
 import React, { useState } from 'react';
-import { BookOpen, MessageCircle, Wand2 } from 'lucide-react';
+import { BookOpen, MessageCircle, Wand2, Globe } from 'lucide-react';
 import MangaTranslator from './components/MangaTranslator';
 import ChatBot from './components/ChatBot';
 import ImageGenerator from './components/ImageGenerator';
 import LandingPage from './components/LandingPage';
 import { ViewState } from './types';
+import { translations, Language } from './translations';
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.LANDING);
+    const [language, setLanguage] = useState<Language>('en');
+
+    const t = translations[language];
+
+    const toggleLanguage = () => {
+        setLanguage(prev => prev === 'en' ? 'vi' : 'en');
+    };
 
     const renderContent = () => {
         switch (currentView) {
             case ViewState.LANDING:
-                return <LandingPage onEnter={() => setCurrentView(ViewState.TRANSLATOR)} />;
+                return <LandingPage onEnter={() => setCurrentView(ViewState.TRANSLATOR)} lang={language} t={t} />;
             case ViewState.TRANSLATOR:
-                return <MangaTranslator />;
+                return <MangaTranslator lang={language} t={t} />;
             case ViewState.CHAT:
-                return <ChatBot />;
+                return <ChatBot lang={language} t={t} />;
             case ViewState.IMAGE_GEN:
-                return <ImageGenerator />;
+                return <ImageGenerator lang={language} t={t} />;
             default:
-                return <LandingPage onEnter={() => setCurrentView(ViewState.TRANSLATOR)} />;
+                return <LandingPage onEnter={() => setCurrentView(ViewState.TRANSLATOR)} lang={language} t={t} />;
         }
     };
 
     if (currentView === ViewState.LANDING) {
-        return renderContent();
+        return (
+            <div className="relative">
+                {renderContent()}
+                <button 
+                    onClick={toggleLanguage}
+                    className="absolute top-6 right-6 z-50 px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white text-sm font-bold hover:bg-white/20 transition-all flex items-center gap-2"
+                >
+                    <Globe className="w-4 h-4" />
+                    {language === 'en' ? 'English' : 'Tiếng Việt'}
+                </button>
+            </div>
+        );
     }
 
     return (
@@ -38,25 +57,37 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-8 w-full">
+                <div className="flex flex-col gap-8 w-full flex-1">
                     <NavButton 
                         icon={<BookOpen className="w-6 h-6" />} 
-                        label="Read" 
+                        label={t.nav.read}
                         isActive={currentView === ViewState.TRANSLATOR} 
                         onClick={() => setCurrentView(ViewState.TRANSLATOR)} 
                     />
                     <NavButton 
                         icon={<MessageCircle className="w-6 h-6" />} 
-                        label="Chat" 
+                        label={t.nav.chat}
                         isActive={currentView === ViewState.CHAT} 
                         onClick={() => setCurrentView(ViewState.CHAT)} 
                     />
                      <NavButton 
                         icon={<Wand2 className="w-6 h-6" />} 
-                        label="Create" 
+                        label={t.nav.create}
                         isActive={currentView === ViewState.IMAGE_GEN} 
                         onClick={() => setCurrentView(ViewState.IMAGE_GEN)} 
                     />
+                </div>
+
+                {/* Language Toggle in Sidebar */}
+                <div className="mt-auto">
+                    <button
+                        onClick={toggleLanguage}
+                        className="flex flex-col items-center gap-2 group"
+                    >
+                        <div className="w-10 h-10 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-xs font-bold text-stone-400 group-hover:text-white group-hover:border-indigo-500 transition-all group-hover:shadow-[0_0_10px_rgba(99,102,241,0.3)]">
+                            {language === 'en' ? 'EN' : 'VI'}
+                        </div>
+                    </button>
                 </div>
             </nav>
 
@@ -88,7 +119,7 @@ const NavButton: React.FC<NavButtonProps> = ({ icon, label, isActive, onClick })
             }`}>
                 {icon}
             </div>
-            <span className="text-[10px] font-medium tracking-wide uppercase">{label}</span>
+            <span className="text-[10px] font-medium tracking-wide uppercase text-center w-full px-1 truncate">{label}</span>
             
             {/* Active Indicator */}
             {isActive && (

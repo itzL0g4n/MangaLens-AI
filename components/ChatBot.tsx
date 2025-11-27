@@ -3,20 +3,33 @@ import { createChatSession } from '../services/geminiService';
 import { ChatMessage } from '../types';
 import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { GenerateContentResponse } from "@google/genai";
+import { Language } from '../translations';
 
-const ChatBot: React.FC = () => {
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        { id: 'init', role: 'model', text: "Hello! I'm your MangaLens AI assistant. Ask me about manga recommendations, translations, or plot explanations!" }
-    ]);
+interface ChatBotProps {
+    lang: Language;
+    t: any;
+}
+
+const ChatBot: React.FC<ChatBotProps> = ({ lang, t }) => {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const chatSession = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const hasInitialized = useRef(false);
 
     // Initialize chat session once
     useEffect(() => {
         chatSession.current = createChatSession();
     }, []);
+
+    // Set initial message on mount
+    useEffect(() => {
+        if (!hasInitialized.current) {
+            setMessages([{ id: 'init', role: 'model', text: t.chat.initialMessage }]);
+            hasInitialized.current = true;
+        }
+    }, [t.chat.initialMessage]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -69,15 +82,15 @@ const ChatBot: React.FC = () => {
 
     return (
         <div className="h-full w-full flex flex-col bg-stone-950">
-            <header className="p-6 border-b border-stone-800 bg-stone-900">
+            <header className="p-6 border-b border-stone-800 bg-stone-900 hidden md:block">
                 <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                     <Sparkles className="text-indigo-400" />
-                    AI Assistant
+                    {t.chat.header}
                 </h1>
-                <p className="text-stone-400 text-sm">Powered by Gemini 3 Pro</p>
+                <p className="text-stone-400 text-sm">{t.chat.subheader}</p>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-stone-950" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
                 {messages.map((msg) => (
                     <div 
                         key={msg.id} 
@@ -108,14 +121,14 @@ const ChatBot: React.FC = () => {
                 <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-6 bg-stone-900 border-t border-stone-800">
+            <div className="p-6 bg-stone-900 border-t border-stone-800 shrink-0">
                 <div className="max-w-4xl mx-auto relative">
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder="Ask about your favorite manga..."
+                        placeholder={t.chat.inputPlaceholder}
                         disabled={isLoading}
                         className="w-full bg-stone-950 text-white border border-stone-700 rounded-full py-4 pl-6 pr-14 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner placeholder-stone-600"
                     />
